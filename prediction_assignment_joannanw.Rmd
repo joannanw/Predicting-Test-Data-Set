@@ -1,0 +1,123 @@
+---
+title: "Prediction Assignment Writeup"
+author: "joannanw"
+date: "Sunday, May 24, 2015"
+output: html_document
+---
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+## Data Processing
+To start, download the training and testing data set from the URL links. Load these files into data frame variables in R.
+
+```{r}
+url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+filename <- basename(url)
+if(!file.exists(filename))
+  {
+    download.file(url, filename, mode = "wb")
+  }
+train <- read.csv(filename)
+url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+filename <- basename(url)
+if(!file.exists(filename))
+  {
+    download.file(url, filename, mode = "wb")
+  }
+test <- read.csv(filename)
+```
+
+
+As good practice, check for any missing values. Columns with missing values will not be used in the model. Then, subset the data frames with appropriate predictors and outcome columns.
+
+```{r}
+isNa <- sapply(test, function (x) any(is.na(x) | x == ""))
+isPredictor <- !isNa & grepl("belt|[^(fore)]arm|dumbbell|forearm", names(isNa))
+predictorCol <- names(isNa)[isPredictor]
+```
+
+Below is the list of all columns, where "classe" is the outcome column.
+
+```{r}
+test <- test[, c(predictorCol)]
+train <- train[, c("classe", predictorCol)] # classe is the outcome column
+names(train)
+train$classe <- as.factor(train$classe)
+summary(train$classe)
+```
+
+## Data Partition
+
+The training data set is then partitioned into 70% train and 30% test data. This assist in cross-validating the model built in the next section.
+
+```{r}
+suppressWarnings(library(caret))
+set.seed(1722)
+inTrain <- createDataPartition(train$classe, p = 0.7)[[1]]
+trainData <- train[inTrain, ]
+testData <- train[-inTrain, ]
+# # Preprocess trainData with only predictor variables by centering and scaling
+# trainDataPreproc <- preProcess(trainData[, predictorCol])
+# trainDataPredict <- predict(trainDataPreproc, trainData[, predictorCol])
+# trainDataCS <- cbind(trainData$classe, trainDataPredict)
+# names(trainDataCS)[1] <- "classe"
+# # Check for Near Zero Variance
+# nzv <- nearZeroVar(trainDataCS, saveMetrics = TRUE)
+# if(any(nzv$nzv)) nzv else message("All variables do not have Near Zero Variance.")
+# # Preprocess testData with only predictor variables by centering and scaling
+# testDataPreproc <- preProcess(testData[, predictorCol])
+# testDataPredict <- predict(testDataPreproc, testData[, predictorCol])
+# testDataCS <- cbind(testData$classe, testDataPredict)
+# names(testDataCS)[1] <- "classe"
+```
+
+## Data Modeling
+
+Now that the original training dataset has been partitioned, we are ready to perform data modeling on the trainData partition. We are then able to evaluate the result of the model on the testData partition.
+
+The data modeling will be done using Random Forest algorithm. This algorithm selects important variables and is robust to correlated covariates and outliers. A 5-fold cross-validation is used when applying the algorithm.
+
+```{r}
+suppressWarnings(library("randomForest"))
+suppressWarnings(library("rpart"))
+suppressWarnings(library("rpart.plot"))
+controlRf <- trainControl(method = "cv", 5)
+modelRf <- train(classe ~ ., data = trainData, method = "rf", trControl = controlRf, ntree = 250)
+modelRf
+```
+
+Next, we test the performance of the model on the testData partition.
+
+```{r}
+predictModel <- predict(modelRf, testData)
+outOfSampleError <- 1 - as.numeric(confusionMatrix(testData$classe, predictModel)$overall[1])
+outOfSampleError
+cm <- confusionMatrix(testData$classe, predictModel)
+```
+
+As shown above, the Accuracy is `{r} cm$overall['Accuracy']` and the Kappa is `{r} cm$overall['Kappa']`. The out-of-sample error is `{r} outofSampleError`.
+
+Please see the Appendix for the Tree Diagram Visualization of the model.
+
+## Predict Test Data Set
+
+Now, we apply the  model created from the train data set to the test data set. 
+
+```{r}
+result <- predict(modelRf, test)
+result
+```
+
+## Appendix
+
+Tree Diagram Visualization of the model:
+
+```{r}
+treeModel <- rpart(classe ~ ., data=trainData, method="class")
+prp(treeModel)
+```
+
