@@ -81,6 +81,8 @@ Now that the original training dataset has been partitioned, we are ready to per
 
 The data modeling will be done using Random Forest algorithm. This algorithm selects important variables and is robust to correlated covariates and outliers. A 5-fold cross-validation is used when applying the algorithm.
 
+I expect the out-of-sample error to be less than 1%.
+
 ```{r}
 suppressWarnings(library("randomForest"))
 suppressWarnings(library("rpart"))
@@ -97,9 +99,10 @@ predictModel <- predict(modelRf, testData)
 outOfSampleError <- 1 - as.numeric(confusionMatrix(testData$classe, predictModel)$overall[1])
 outOfSampleError
 cm <- confusionMatrix(testData$classe, predictModel)
+cm
 ```
 
-As shown above, the Accuracy is `{r} cm$overall['Accuracy']` and the Kappa is `{r} cm$overall['Kappa']`. The out-of-sample error is `{r} outofSampleError`.
+As shown above, the Accuracy is `r cm$overall['Accuracy']` and the Kappa is `r cm$overall['Kappa']`. The out-of-sample error is `r outOfSampleError`, which is less than 1%.
 
 Please see the Appendix for the Tree Diagram Visualization of the model.
 
